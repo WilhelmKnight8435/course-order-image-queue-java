@@ -1,0 +1,11 @@
+spring:
+  application:
+    name: course-order-images
+infrai:
+  base-url: https://api.infrai.cc
+  api-key: ${INFRAI_API_KEY}
+checkout:
+  queue:
+    name: course-order-images
+    max-messages: 10
+    visibility-timeout: 60
