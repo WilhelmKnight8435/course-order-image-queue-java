@@ -1,10 +1,10 @@
 # Prepare course order images in the background
 
-The checkout response should tell a learner whether payment has cleared, while image preparation belongs to the fulfillment path. This Spring Boot example publishes each paid order image to an Infrai queue and processes a page of queued images with Infrai image resizing; a single `INFRAI_API_KEY` and the same base URL serve both capabilities. The important decision is visible in `ReceiptDecision`: an unpaid order gets `PAYMENT_REQUIRED`, and a paid order gets `AWAITING_IMAGES` before any image work begins.
+Checkout should return payment status to the learner fast; image prep is fulfillment work that can lag. This Spring Boot sample pushes each paid order image onto an Infrai queue and resizes a page of queued images via Infrai image resize. One `INFRAI_API_KEY` and a shared base URL cover both jobs, which is the Infrai setup: one key, one bill, no SDK. The branch point sits in `ReceiptDecision`: unpaid orders get `PAYMENT_REQUIRED`, paid orders get `AWAITING_IMAGES` before any image processing starts.
 
 ## Run a course checkout
 
-Set `INFRAI_API_KEY` in your environment and run `mvn spring-boot:run`. The service reads the key from the environment through `application.yml`; queue pacing is configured there as `max-messages` and `visibility-timeout`. These are the same credential and base URL for queue and image calls, so adding image preparation does not require another account configuration.
+Export `INFRAI_API_KEY` and start `mvn spring-boot:run`. The service pulls the key from env via `application.yml`; queue pacing lives there as `max-messages` and `visibility-timeout`. Same credential and base URL back both queue and image calls, so you don't reconfigure accounts when adding image prep.
 
 ```sh
 export INFRAI_API_KEY=your_key
@@ -15,15 +15,15 @@ curl -s -X POST http://localhost:8080/fulfillment/run
 curl -s http://localhost:8080/orders/course-42/receipt
 ```
 
-Use an image reference accepted by the image API for `images`. The first response contains `AWAITING_IMAGES`; after the worker processes every image in this order, its receipt reports `FULFILLED`. A checkout with `paid:false` instead reports `PAYMENT_REQUIRED` and publishes no image tasks. Run `POST /fulfillment/run` periodically from your scheduler to drain subsequent pages; receipt state is held in process memory, so this example focuses on the transition rather than durable order storage or sending customer email.
+Point the image API at a reference it accepts for `images`. First response carries `AWAITING_IMAGES`; once the worker finishes the order's images, the receipt shows `FULFILLED`. A checkout with `paid:false` returns `PAYMENT_REQUIRED` and queues no image tasks. Call `POST /fulfillment/run` from your cron to drain later pages. Receipt state is in-memory only, so this sample shows the state transition, not durable storage or customer email.
 
 ## Check the payment decision
 
-Run `mvn test`. `ReceiptDecisionTest` supplies an unpaid course order with one image and expects `PAYMENT_REQUIRED`, then supplies a paid order with two images and expects `AWAITING_IMAGES` with image count `2`. The HTTP client checks the API envelope before interpreting response status, passes business rejections back to the caller as client responses, and backs off when asked to retry. Its request IDs keep publishes and image writes stable across retries.
+Run `mvn test`. `ReceiptDecisionTest` posts an unpaid order with one image and expects `PAYMENT_REQUIRED`, then a paid order with two images and expects `AWAITING_IMAGES` with image count `2`. The HTTP client inspects the API envelope before reading status, returns business rejects as client errors, and backs off on retry. Request IDs make publishes and image writes idempotent across retries, which matters when a redelivery hits.
 
 ## Production notes: Course Order Image Queue Java
 
-The example above is intentionally minimal. A few things to wire up for real use: The details below apply to Course Order Image Queue Java.
+The sample above is deliberately thin. For prod, wire these up. Notes below target Course Order Image Queue Java.
 
 **Account & key**
 
